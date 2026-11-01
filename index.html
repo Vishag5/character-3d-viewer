@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Character Viewer</title>
+  <!-- Google model-viewer web component -->
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #090a16;
+      color: #ffffff;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Navigation / Brand Header */
+    header {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(18, 20, 36, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 16px;
+      border-radius: 999px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    header h1 {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+    }
+
+    .badge {
+      font-size: 11px;
+      background: rgba(99, 102, 241, 0.25);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* 3D Canvas / Model-Viewer */
+    model-viewer {
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at 50% 40%, #1e2242 0%, #0d0f1f 60%, #06070e 100%);
+      --poster-color: transparent;
+      outline: none;
+    }
+
+    /* Custom Loading Progress Bar */
+    .progress-bar {
+      display: block;
+      width: 33%;
+      height: 4px;
+      max-width: 200px;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      border-radius: 4px;
+      background-color: rgba(255, 255, 255, 0.15);
+      overflow: hidden;
+      transition: opacity 0.3s;
+    }
+
+    .progress-bar.hide {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .update-bar {
+      background-color: #6366f1;
+      width: 0%;
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+
+    /* Floating Control Dock */
+    .dock-container {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      width: 90%;
+      max-width: 600px;
+    }
+
+    .dock {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(18, 20, 36, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 8px 12px;
+      border-radius: 20px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .dock-divider {
+      width: 1px;
+      height: 24px;
+      background: rgba(255, 255, 255, 0.15);
+      margin: 0 4px;
+    }
+
+    button {
+      background: rgba(255, 255, 255, 0.08);
+      color: #e2e8f0;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 8px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      user-select: none;
+    }
+
+    button:hover {
+      background: rgba(255, 255, 255, 0.16);
+      border-color: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+      color: #ffffff;
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button.active {
+      background: #4f46e5;
+      border-color: #6366f1;
+      color: #ffffff;
+      box-shadow: 0 0 14px rgba(99, 102, 241, 0.5);
+    }
+
+    /* Hint text */
+    .hint {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.45);
+      letter-spacing: 0.2px;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+    }
+
+    /* AR View Button Override inside model-viewer */
+    #ar-button {
+      background-color: #ffffff;
+      border-radius: 12px;
+      border: none;
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      height: 38px;
+      padding: 0 16px;
+      font-weight: 600;
+      font-size: 13px;
+      color: #0f172a;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    #ar-button:hover {
+      transform: scale(1.03);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <h1>3D Character</h1>
+    <span class="badge">Interactive</span>
+  </header>
+
+  <!-- Model Viewer Element -->
+  <model-viewer id="mv"
+    src="Untitled2.glb"
+    alt="3D Character"
+    camera-controls
+    auto-rotate
+    auto-rotate-delay="1500"
+    rotation-per-second="25deg"
+    shadow-intensity="1.2"
+    shadow-softness="0.8"
+    exposure="1.05"
+    ar
+    ar-modes="webxr scene-viewer quick-look"
+    ar-scale="auto"
+    camera-orbit="0deg 75deg 105%"
+    min-camera-orbit="auto auto 20%"
+    max-camera-orbit="auto auto 300%">
+
+    <!-- Progress bar slot -->
+    <div class="progress-bar" slot="progress-bar">
+      <div class="update-bar"></div>
+    </div>
+
+    <!-- AR trigger button -->
+    <button slot="ar-button" id="ar-button">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 3H3v2m0 14v2h2m14-18h2v2m0 14v2h-2"/>
+        <path d="M12 9v6m3-3H9"/>
+      </svg>
+      View in AR
+    </button>
+  </model-viewer>
+
+  <!-- Controls Dock -->
+  <div class="dock-container">
+    <div class="dock">
+      <!-- Dynamic Animation Buttons Container -->
+      <div id="anim-buttons" style="display: flex; gap: 6px;"></div>
+
+      <div class="dock-divider"></div>
+
+      <!-- Playback Toggle -->
+      <button id="toggle-play" title="Play/Pause Animation">
+        <span id="play-icon">⏸</span>
+        <span id="play-text">Pause</span>
+      </button>
+
+      <!-- Auto Rotate Toggle -->
+      <button id="toggle-rotate" class="active" title="Toggle Auto-Rotation">
+        🔄 Rotate
+      </button>
+
+      <!-- Reset Camera -->
+      <button id="reset-cam" title="Reset View Angle">
+        🎯 Reset View
+      </button>
+    </div>
+
+    <div class="hint">Drag to orbit • Scroll to zoom • Right-click to pan</div>
+  </div>
+
+  <script>
+    const mv = document.getElementById('mv');
+    const animContainer = document.getElementById('anim-buttons');
+    const togglePlayBtn = document.getElementById('toggle-play');
+    const playIcon = document.getElementById('play-icon');
+    const playText = document.getElementById('play-text');
+    const toggleRotateBtn = document.getElementById('toggle-rotate');
+    const resetCamBtn = document.getElementById('reset-cam');
+
+    let currentAnim = null;
+    let isPlaying = true;
+
+    // Helper: Clean animation display name (e.g., 'Idle.009' -> 'Idle')
+    function cleanAnimName(name) {
+      return name.replace(/\.\d+$/, '');
+    }
+
+    // Initialize animation buttons once model is loaded
+    mv.addEventListener('load', () => {
+      const animations = mv.availableAnimations || [];
+      console.log('Detected model animations:', animations);
+
+      animContainer.innerHTML = '';
+
+      if (animations.length > 0) {
+        animations.forEach((animName, index) => {
+          const btn = document.createElement('button');
+          const displayName = cleanAnimName(animName);
+          btn.textContent = displayName;
+          btn.dataset.anim = animName;
+
+          // Default to first animation (usually Idle)
+          if (index === 0) {
+            btn.classList.add('active');
+            currentAnim = animName;
+            mv.animationName = animName;
+            mv.play();
+          }
+
+          btn.addEventListener('click', () => {
+            document.querySelectorAll('#anim-buttons button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentAnim = animName;
+            mv.animationName = animName;
+            mv.play();
+            isPlaying = true;
+            playIcon.textContent = '⏸';
+            playText.textContent = 'Pause';
+          });
+
+          animContainer.appendChild(btn);
+        });
+      } else {
+        // Fallback buttons if animations array takes a moment
+        const fallbackNames = ['Idle', 'Wave'];
+        fallbackNames.forEach((name, i) => {
+          const btn = document.createElement('button');
+          btn.textContent = name;
+          if (i === 0) btn.classList.add('active');
+          btn.addEventListener('click', () => {
+            document.querySelectorAll('#anim-buttons button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const target = (mv.availableAnimations || []).find(a => a.startsWith(name)) || name;
+            mv.animationName = target;
+            mv.play();
+          });
+          animContainer.appendChild(btn);
+        });
+      }
+    });
+
+    // Play / Pause toggle
+    togglePlayBtn.addEventListener('click', () => {
+      if (isPlaying) {
+        mv.pause();
+        isPlaying = false;
+        playIcon.textContent = '▶';
+        playText.textContent = 'Play';
+      } else {
+        mv.play();
+        isPlaying = true;
+        playIcon.textContent = '⏸';
+        playText.textContent = 'Pause';
+      }
+    });
+
+    // Auto-rotate toggle
+    toggleRotateBtn.addEventListener('click', () => {
+      if (mv.autoRotate) {
+        mv.autoRotate = false;
+        toggleRotateBtn.classList.remove('active');
+      } else {
+        mv.autoRotate = true;
+        toggleRotateBtn.classList.add('active');
+      }
+    });
+
+    // Reset camera orbit
+    resetCamBtn.addEventListener('click', () => {
+      mv.cameraOrbit = '0deg 75deg 105%';
+      mv.fieldOfView = 'auto';
+    });
+
+    // Custom loading progress
+    const progressBar = document.querySelector('.progress-bar');
+    const updateBar = document.querySelector('.update-bar');
+    mv.addEventListener('progress', (e) => {
+      const { totalProgress } = e.detail;
+      updateBar.style.width = `${totalProgress * 100}%`;
+      if (totalProgress === 1) {
+        setTimeout(() => progressBar.classList.add('hide'), 300);
+      } else {
+        progressBar.classList.remove('hide');
+      }
+    });
+  </script>
+</body>
+</html>
